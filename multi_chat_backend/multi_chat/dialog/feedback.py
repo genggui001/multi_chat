@@ -3,10 +3,9 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter
-from pydantic import BaseModel
-
 from multi_chat.models import ResponseCode, ResponseWrapper
 from multi_chat.mongo.dialog_info import get_one_dialog_info
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -15,7 +14,7 @@ class RequestModel(BaseModel):
     conversation_id: UUID
     message_id: UUID
     rating: str
-    tags: List[str]
+    tags: List[str] = []
     text: str = ""
     
 
