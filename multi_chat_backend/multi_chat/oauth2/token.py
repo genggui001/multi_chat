@@ -52,7 +52,11 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 async def register(data: RegisterRequest) -> ResponseWrapper[RegisterResponse]:
 
     if data.register_code not in {
-        
+        '32ju1',
+        '56ka3',
+        '77uq1',
+        '9m21g',
+        'ss1d5',
     }:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
