@@ -8,6 +8,7 @@ from .chatgpt import create_chatgpt_client, get_chatgpt_client, refresh
 from .dialog import ask, conversation, feedback, moderations
 from .log import logger
 from .mongo import create_connection as create_mongo_connection
+from .oauth2 import token
 from .redis import create_connection as create_redis_connection
 from .tasks import repeat_task
 
@@ -35,6 +36,9 @@ app.include_router(refresh.router, prefix="/refresh", tags=["refresh"])
 app.include_router(conversation.router, prefix="/backend-api", tags=["backend-api"])
 app.include_router(feedback.router, prefix="/backend-api", tags=["backend-api"])
 app.include_router(moderations.router, prefix="/backend-api", tags=["backend-api"])
+
+# 登录接口
+app.include_router(token.router, prefix="/oauth2", tags=["oauth2"])
 
 @app.on_event('startup')
 @repeat_task(seconds=config.model.refresh_seconds, wait_first=True)

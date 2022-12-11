@@ -2,9 +2,10 @@ import json
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter
-from multi_chat.models import ResponseCode, ResponseWrapper
+from fastapi import APIRouter, Depends
 from multi_chat.mongo.dialog_info import get_one_dialog_info
+from multi_chat.mongo.models import User
+from multi_chat.mongo.user import get_current_active_user
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -28,7 +29,8 @@ class ResponseModel(BaseModel):
 
 @router.post("/conversation/message_feedback", response_model=ResponseModel)
 async def feedback(
-    data: RequestModel
+    data: RequestModel,
+    # current_user: User = Depends(get_current_active_user),
 ) -> ResponseModel:
 
     session_id = data.conversation_id

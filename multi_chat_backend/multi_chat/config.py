@@ -3,6 +3,11 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, BaseSettings, Field
 
 
+class Oauth2Config(BaseModel):
+    secret_key: str = 'bfaa7abddeb09e429c760a323734c797689cd8a7ea6368bb15ccf3bc941e9aa5'
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+
 class UvicornConfig(BaseModel):
     app_module: str = "multi_chat:app"
     host: str = "127.0.0.1"
@@ -44,6 +49,7 @@ class LoggerConfig(BaseModel):
 
 class Config(BaseSettings):
     uvicorn: UvicornConfig = Field(default_factory=UvicornConfig)
+    oauth2: Oauth2Config = Field(default_factory=Oauth2Config)
     fastapi: FastAPIConfig = Field(default_factory=FastAPIConfig)
     mongo: MongoConfig = Field(default_factory=MongoConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)

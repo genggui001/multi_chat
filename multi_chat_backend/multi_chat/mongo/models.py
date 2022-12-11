@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 from uuid import UUID
 
 from . import MongoModel
@@ -26,5 +26,14 @@ class DialogHistory(MongoModel):
     def collection_name(cls) -> str:
         return "dialog_history"
 
+
+class User(MongoModel):
+    username: str
+    hashed_password: str
+    disabled: Union[bool, None] = None
+
+    @classmethod
+    def collection_name(cls) -> str:
+        return "user"
 
 

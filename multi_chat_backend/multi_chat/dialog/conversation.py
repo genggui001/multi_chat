@@ -3,15 +3,17 @@ import traceback
 from typing import List, Optional, Union
 from uuid import UUID, uuid1
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-
-from multi_chat import logger
 from multi_chat.chatgpt import get_chatgpt_client
 from multi_chat.models import ResponseCode, ResponseWrapper
 from multi_chat.mongo.dialog_info import (get_now_dialog_info,
                                           save_new_dialog_info_and_update_now)
+from multi_chat.mongo.models import User
+from multi_chat.mongo.user import get_current_active_user
+from pydantic import BaseModel
+
+from multi_chat import logger
 
 router = APIRouter()
 
@@ -42,7 +44,8 @@ class ResponseModel(BaseModel):
 
 @router.post("/conversation")
 async def conversation(
-    data: RequestModel
+    data: RequestModel,
+    # current_user: User = Depends(get_current_active_user),
 ) -> Union[StreamingResponse, ResponseWrapper[ResponseModel]]:
     try:
         #当前句子
