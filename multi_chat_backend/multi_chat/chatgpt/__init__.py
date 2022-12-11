@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import random
@@ -5,12 +6,12 @@ from typing import AsyncGenerator, List, Mapping, Optional, Tuple
 
 import aiofiles
 from asyncer import asyncify
+from multi_chat.redis import (AvailableOpenAIAccountSet, OpenAIAccount,
+                              OpenAIAccountCache)
 from pychatgpt.classes import openai
 from self_limiters import MaxSleepExceededError, RedisError, Semaphore
 
 from multi_chat import config, logger
-from multi_chat.redis import (AvailableOpenAIAccountSet, OpenAIAccount,
-                              OpenAIAccountCache)
 
 from .ask import ask as chatgpt_ask
 
@@ -207,6 +208,24 @@ class MChatGPT:
                 await AvailableOpenAIAccountSet.remove(item=account_email)
 
                 if retry > 0:
+                    async for retry_re in self.ask(
+                        prompt=prompt,
+                        account_email=account_email,
+                        conversation_id=conversation_id,
+                        previous_convo_id=previous_convo_id,
+                        retry=retry,
+                    ):
+                        yield retry_re
+                else:
+                    logger.warning(account_email + " retry max")
+                    raise e
+            elif (
+                "Maybe try me again" in e_str
+            ):
+                if retry > 0:
+                    # 休眠一下
+                    await asyncio.sleep(0.3)
+
                     async for retry_re in self.ask(
                         prompt=prompt,
                         account_email=account_email,
