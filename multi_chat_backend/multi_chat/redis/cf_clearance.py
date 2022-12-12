@@ -81,9 +81,10 @@ async def get_cf_clearance(
                     },
                     data=json.dumps({
                         "proxy": {"server": "" if proxies is None else proxies} , 
-                        "timeout": 20, 
+                        "timeout": 60, 
                         "url": url
                     }),  # type: ignore
+                    timeout=120,
                 )
 
                 cf_clearance_res = CFClearanceModel.parse_obj(cf_clearance_res.json())
