@@ -66,7 +66,7 @@ async def ask(
             cookies={
                 "cf_clearance": chat_cf_clearance,
             } if chat_cf_clearance is not None else None,
-            timeout=120,
+            timeout=360,
         ) as response:
             if response.status_code == 200:
                 async for line in response.aiter_lines():
