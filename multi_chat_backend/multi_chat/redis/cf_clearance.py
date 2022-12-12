@@ -38,6 +38,10 @@ class CFClearanceCache:
         return await get_database().exists(cls.format_key(key)) # type: ignore
 
     @classmethod
+    async def delete(cls, key: str) -> bool:
+        return await get_database().execute_command("del", cls.format_key(key)) # type: ignore
+
+    @classmethod
     async def set(
         cls, 
         key: str, 
@@ -91,7 +95,7 @@ async def get_cf_clearance(
 
                 assert "cf_clearance" in cf_clearance_res.cookies
 
-                await CFClearanceCache.set(key=url, value=cf_clearance_res, ex=random.randint(64800, 86400))
+                await CFClearanceCache.set(key=url, value=cf_clearance_res, ex=random.randint(3600, 5400))
 
                 logger.info(url + " cf clearance")
                 return cf_clearance_res

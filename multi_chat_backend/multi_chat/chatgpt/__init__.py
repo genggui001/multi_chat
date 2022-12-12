@@ -8,7 +8,8 @@ import aiofiles
 from asyncer import asyncify
 from multi_chat.redis import (AvailableOpenAIAccountSet, OpenAIAccount,
                               OpenAIAccountCache)
-from multi_chat.redis.cf_clearance import get_cf_clearance
+from multi_chat.redis.cf_clearance import CFClearanceCache, get_cf_clearance
+from pychatgpt.classes import exceptions as Exceptions
 from self_limiters import MaxSleepExceededError, RedisError, Semaphore
 
 from multi_chat import config, logger
@@ -168,6 +169,12 @@ class MChatGPT:
             else:
                 raise Exception(email + "get update lock retry max")
 
+        except Exceptions.Auth0Exception as e:
+            # cf 失效
+            logger.warning("https://chat.openai.com/ cf is not available")
+            await CFClearanceCache.delete(key="https://chat.openai.com/")
+            raise e
+            
         # redis炸
         except RedisError as e:
             raise e
@@ -263,6 +270,28 @@ class MChatGPT:
                 if retry > 0:
                     # 休眠一下
                     await asyncio.sleep(0.3)
+
+                    async for retry_re in self.ask(
+                        prompt=prompt,
+                        account_email=account_email,
+                        conversation_id=conversation_id,
+                        previous_convo_id=previous_convo_id,
+                        retry=retry,
+                    ):
+                        yield retry_re
+                else:
+                    logger.warning(account_email + " retry max")
+                    raise e
+            elif (
+                "[Status Code] 403" in e_str 
+                and "cloudflare" in e_str 
+            ):
+                if retry > 0:
+                    
+                    # 休眠一下
+                    await asyncio.sleep(0.3)
+                    logger.warning("https://chat.openai.com/" + " cf is not available")
+                    await CFClearanceCache.delete(key="https://chat.openai.com/")
 
                     async for retry_re in self.ask(
                         prompt=prompt,
