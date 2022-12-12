@@ -174,7 +174,7 @@ class MChatGPT:
             logger.warning("https://chat.openai.com/ cf is not available")
             await CFClearanceCache.delete(key="https://chat.openai.com/")
             raise e
-            
+
         # redis炸
         except RedisError as e:
             raise e
@@ -266,6 +266,8 @@ class MChatGPT:
                     raise e
             elif (
                 "Maybe try me again" in e_str
+                or "incomplete chunked read" in e_str
+                or "peer closed connection" in e_str
             ):
                 if retry > 0:
                     # 休眠一下
