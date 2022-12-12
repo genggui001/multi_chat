@@ -56,7 +56,7 @@ async def ask(
         if isinstance(proxies, str):
             proxies = {'http': proxies, 'https': proxies} # type: ignore
 
-    async with httpx.AsyncClient(proxies=proxies) as session: # type: ignore
+    async with httpx.AsyncClient(proxies=proxies, transport=httpx.AsyncHTTPTransport(retries=5)) as session: # type: ignore
 
         async with session.stream(
             'POST',
