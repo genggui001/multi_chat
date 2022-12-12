@@ -1,0 +1,57 @@
+version: "2.3"
+services:
+  redis:
+    image: redis:5
+    restart: always
+    volumes:
+      - ./data/redis:/data
+
+  mongo:
+    image: mongo:3.6.8
+    restart: always
+    volumes:
+      - ./data/mongodb:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=Tiankong1234
+
+  cf-clearance:
+    build: ./cf-clearance
+    dockerfile: ./cf-clearance/docker/Dockerfile
+    image: my-cf-clearance
+    restart: always
+    command: --host 0.0.0.0 --port 41888 --workers 1
+
+  multi-chat-backend:
+    build: ./multi_chat_backend
+    image: multi_chat_backend
+    restart: always
+    volumes:
+      - ./data/backend_logs:/app/logs
+      - ./data/accounts.json:/app/accounts.json
+    environment:
+      - UVICORN__HOST=0.0.0.0
+      - UVICORN__RELOAD=False
+      - FASTAPI__OPENAPI_URL=/openapi.json
+      - FASTAPI__DOCS_URL=/docs
+      - FASTAPI__DEBUG=False
+      - MONGO__MONGO_URL=mongodb://root:Tiankong1234@mongo:27017
+      - MONGO__MONGO_DATABASE=multi_chat
+      - REDIS__REDIS_URL=redis://redis:6379/0
+      - MODEL__ACCOUNT_PATH=./accounts.json
+      - MODEL__GET_CF_CLEARANCE_URL=http://cf-clearance:41888/challenge
+    depends_on:
+      - redis
+      - mongo
+      - cf-clearance
+
+  nginx:
+    image: nginx:latest
+    restart: always
+    depends_on:
+      - multi-chat-backend
+    volumes:
+      - ./data/default.conf:/etc/nginx/conf.d/default.conf
+      - ./gpt_front_end:/data/gpt_front_end
+    ports:
+      - "0.0.0.0:47480:80"
