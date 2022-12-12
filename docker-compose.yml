@@ -5,12 +5,7 @@ services:
     restart: always
     volumes:
       - ./data/redis:/data
-    logging:
-      driver: "json-file"
-      options:
-       max-file: "5"
-       max-size: "10m"
-
+  
   mongo:
     image: mongo:3.6.8
     restart: always
@@ -19,11 +14,6 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=Tiankong1234
-    logging:
-      driver: "json-file"
-      options:
-       max-file: "5"
-       max-size: "10m"
 
   cf-clearance:
     build:
