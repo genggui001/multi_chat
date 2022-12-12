@@ -81,7 +81,7 @@ async def get_cf_clearance(
                     },
                     data=json.dumps({
                         "proxy": {"server": "" if proxies is None else proxies} , 
-                        "timeout": 30, 
+                        "timeout": 20, 
                         "url": url
                     }),  # type: ignore
                 )
