@@ -1,5 +1,6 @@
 import json
 import random
+import traceback
 from typing import Optional
 
 import httpx
@@ -58,33 +59,50 @@ async def get_cf_clearance(
     if cf_clearance is not None:
         return cf_clearance
 
+    if proxies is not None:
+        if isinstance(proxies, str):
+            proxies = {'http': proxies, 'https': proxies} # type: ignore
+
     try:
+        # 获取锁
+        async with Semaphore(
+            name="mchatgpt:get_cf_clearance_lock",
+            capacity=1,
+            redis_url=config.redis.redis_url,
+            expiry=1800,
+            max_sleep=1.0,
+        ):
 
-        if proxies is not None:
-            if isinstance(proxies, str):
-                proxies = {'http': proxies, 'https': proxies} # type: ignore
+            async with httpx.AsyncClient(proxies=proxies) as session: # type: ignore
+                cf_clearance_res = await session.post(
+                    url=config.model.get_cf_clearance_url,
+                    headers = {
+                        'Content-Type': 'application/json',
+                    },
+                    data=json.dumps({
+                        "proxy": {"server": "" if proxies is None else proxies} , 
+                        "timeout": 30, 
+                        "url": url
+                    }),  # type: ignore
+                )
 
-        async with httpx.AsyncClient(proxies=proxies) as session: # type: ignore
-            cf_clearance_res = await session.post(
-                url=config.model.get_cf_clearance_url,
-                headers = {
-                    'Content-Type': 'application/json',
-                },
-                data=json.dumps({
-                    "proxy": {"server": "" if proxies is None else proxies} , 
-                    "timeout": 30, 
-                    "url": url
-                }),  # type: ignore
-            )
+                cf_clearance_res = CFClearanceModel.parse_obj(cf_clearance_res.json())
 
-            cf_clearance_res = CFClearanceModel.parse_obj(cf_clearance_res.json())
+                assert "cf_clearance" in cf_clearance_res.cookies
 
-            assert "cf_clearance" in cf_clearance_res.cookies
+                await CFClearanceCache.set(key=url, value=cf_clearance_res, ex=random.randint(64800, 86400))
 
-            await CFClearanceCache.set(key=url, value=cf_clearance_res, ex=random.randint(64800, 86400))
+                logger.info(url + " cf clearance")
+                return cf_clearance_res
 
-            logger.info(url + " cf clearance")
-            return cf_clearance_res
+
+    # 锁拿不到
+    except MaxSleepExceededError  as e:
+        logger.info(url + " get update lock retry")
+        if retry > 0:
+            return await get_cf_clearance(url=url, retry=retry-1)
+        else:
+            raise Exception(url + " get update lock retry max")
 
     # redis炸
     except RedisError as e:
@@ -96,7 +114,9 @@ async def get_cf_clearance(
             logger.info(url + " is not available")
             raise e
         else:
-            logger.info(url + "cf clearance update retry")
+            logger.info(url + " cf clearance update retry")
+            logger.warning(traceback.format_exc())
+
             return await get_cf_clearance(url=url, retry=retry-1)
 
 
