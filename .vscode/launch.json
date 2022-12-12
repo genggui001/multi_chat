@@ -1,18 +1,31 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-      {
-        "name": "启动后端",
-        "type": "python",
-        "request": "launch",
-        "program": "main.py",
-        "console": "integratedTerminal",
-        "justMyCode": false,
-        "cwd": "${workspaceFolder}/multi_chat_backend",
-        "env": {
-          "ENVIRONMENT": "develop"
-        }
-      }
-    ]
-  }
-  
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: cf",
+      "type": "python",
+      "request": "launch",
+      "program": "get_cf_cookie.py",
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/multi_chat_backend",
+      "args": [
+        "-u", "https://chat.openai.com",
+        "-f", "cookies.json", 
+        "-v"
+      ]
+    },
+    {
+      "name": "启动后端",
+      "type": "python",
+      "request": "launch",
+      "program": "main.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/multi_chat_backend",
+      "env": {
+        "ENVIRONMENT": "develop"
+      },
+    }
+  ]
+}

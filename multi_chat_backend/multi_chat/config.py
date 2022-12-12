@@ -34,6 +34,7 @@ class ModelConfig(BaseModel):
     account_path: str = "./accounts.json"
     refresh_passwd: str = "Tiankong1234"
     refresh_seconds: int = 600
+    get_cf_clearance_url : str = "http://127.0.0.1:8000/challenge"
 
 class SinkConfig(BaseModel):
     type: Literal["file", "stdout", "stderr"] = "stdout"

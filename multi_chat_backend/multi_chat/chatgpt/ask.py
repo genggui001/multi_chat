@@ -1,8 +1,9 @@
 # Builtins
 import json
 import uuid
-from typing import AsyncGenerator, Tuple
+from typing import AsyncGenerator, Optional, Tuple
 
+# import cfscrape
 # Requests
 import httpx
 
@@ -12,7 +13,9 @@ async def ask(
         prompt: str,
         conversation_id: str or None,
         previous_convo_id: str or None,
-        proxies: str or dict or None
+        proxies: str or dict or None,
+        user_agent: Optional[str] = None,
+        chat_cf_clearance: Optional[str] = None,
 ) -> AsyncGenerator[Tuple[str, str, str], None]:
     auth_token, expiry = auth_token
 
@@ -22,7 +25,7 @@ async def ask(
         'Accept': 'text/event-stream',
         'Referer': 'https://chat.openai.com/chat',
         'Origin': 'https://chat.openai.com',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15',
+        'User-Agent': user_agent,
         'X-OpenAI-Assistant-App-Id': ''
     }
 
@@ -53,13 +56,16 @@ async def ask(
         if isinstance(proxies, str):
             proxies = {'http': proxies, 'https': proxies} # type: ignore
 
-    async with httpx.AsyncClient(proxies=proxies) as session:
+    async with httpx.AsyncClient(proxies=proxies) as session: # type: ignore
 
         async with session.stream(
             'POST',
             url="https://chat.openai.com/backend-api/conversation",
             headers=headers,
             data=json.dumps(data),  # type: ignore
+            cookies={
+                "cf_clearance": chat_cf_clearance,
+            } if chat_cf_clearance is not None else None,
             timeout=120,
         ) as response:
             if response.status_code == 200:
@@ -97,5 +103,6 @@ async def ask(
                     raise Exception(f"[Status Code] {response.status_code} | [Response Text] {r_text}")
                 else:
                     raise Exception(f"[Status Code] {response.status_code} | [Response Text] {r_text}")
+
 
 

@@ -8,24 +8,37 @@ import aiofiles
 from asyncer import asyncify
 from multi_chat.redis import (AvailableOpenAIAccountSet, OpenAIAccount,
                               OpenAIAccountCache)
-from pychatgpt.classes import openai
+from multi_chat.redis.cf_clearance import get_cf_clearance
 from self_limiters import MaxSleepExceededError, RedisError, Semaphore
 
 from multi_chat import config, logger
 
+from . import auth as openai
 from .ask import ask as chatgpt_ask
 
 
 # 手动转异步
 @asyncify
-def _openai_login(email:str, password:str, proxy:Optional[str]=None):
+def _openai_login(
+    email:str, 
+    password:str, 
+    proxy:Optional[str]=None,
+    user_agent: Optional[str] = None,
+    chat_cf_clearance: Optional[str] = None,
+):
     # 删除历史数据
     path = os.path.dirname(os.path.abspath(openai.__file__))
     path = os.path.join(path, "auth.json")
     if os.path.exists(path):
         os.remove(path)
 
-    openai_auth = openai.Auth(email_address=email, password=password, proxy=proxy) # type: ignore
+    openai_auth = openai.Auth(
+        email_address=email, 
+        password=password, 
+        proxy=proxy,
+        user_agent=user_agent,
+        chat_cf_clearance=chat_cf_clearance,
+    ) # type: ignore
     openai_auth.create_token()
 
     access_token, expires_at = openai.get_access_token()
@@ -117,7 +130,25 @@ class MChatGPT:
                 max_sleep=1.0,
             ):
                 account = self.accounts[self.account_map_idx[email]]
-                access_token, expiry = await _openai_login(account.email, account.password, account.proxy)
+
+                chat_cf_clearance = await get_cf_clearance(
+                    url="https://chat.openai.com/",
+                    proxies=account.proxy
+                )
+
+                # auth0_cf_clearance = await get_cf_clearance(
+                #     url="https://auth0.openai.com/",
+                #     proxies=account.proxy
+                # )
+
+                access_token, expiry = await _openai_login(
+                    email=account.email, 
+                    password=account.password, 
+                    proxy=account.proxy,
+                    user_agent=chat_cf_clearance.user_agent,
+                    chat_cf_clearance=chat_cf_clearance.cookies["cf_clearance"],
+                    # auth0_cf_clearance=auth0_cf_clearance.cookies["cf_clearance"],
+                )
                 account.access_token = access_token
                 account.expiry = expiry
 
@@ -188,12 +219,19 @@ class MChatGPT:
                     ), indent=4, ensure_ascii=False)
                 )
 
+                chat_cf_clearance = await get_cf_clearance(
+                    url="https://chat.openai.com/",
+                    proxies=None
+                )
+
                 async for answer, previous_convo, convo_id in chatgpt_ask(
                     auth_token=(access_token, expiry),
                     prompt=prompt,
                     conversation_id=conversation_id, # type: ignore
                     previous_convo_id=previous_convo_id, # type: ignore
                     proxies=proxy, # type: ignore
+                    user_agent=chat_cf_clearance.user_agent,
+                    chat_cf_clearance=chat_cf_clearance.cookies["cf_clearance"],
                 ):
                     yield answer, account_email, previous_convo, convo_id
 
