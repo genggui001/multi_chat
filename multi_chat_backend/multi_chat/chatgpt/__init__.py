@@ -40,9 +40,8 @@ def _openai_login(
         user_agent=user_agent,
         chat_cf_clearance=chat_cf_clearance,
     ) # type: ignore
-    openai_auth.create_token()
+    access_token, expires_at = openai_auth.create_token() # type: ignore
 
-    access_token, expires_at = openai.get_access_token()
     expires_at = int(expires_at) if expires_at is not None else None
 
     assert type(access_token) == str and len(access_token) > 0
