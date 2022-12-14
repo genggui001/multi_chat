@@ -246,6 +246,7 @@ class MChatGPT:
             if (
                 "parse your authentication token" in e_str
                 or "token has expired" in e_str
+                or "Too many requests in 1 hour" in e_str
             ):
                 logger.warning(account_email + "is not available")
                 # token 失效注销
