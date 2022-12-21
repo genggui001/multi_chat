@@ -39,16 +39,16 @@ class Auth:
         )
 
         self.proxy = proxy
-        if self.proxy is not None:
-            if isinstance(self.proxy, str):
-                proxies = {
-                    "http": self.proxy,
-                    "https": self.proxy
-                }
-            else:
-                proxies = self.proxy
-            print(f"{Fore.GREEN}[OpenAI] {Fore.WHITE}Using proxy: {self.proxy}")
-            self.__session.proxies = proxies
+        # if self.proxy is not None:
+        #     if isinstance(self.proxy, str):
+        #         proxies = {
+        #             "http": self.proxy,
+        #             "https": self.proxy
+        #         }
+        #     else:
+        #         proxies = self.proxy
+        #     print(f"{Fore.GREEN}[OpenAI] {Fore.WHITE}Using proxy: {self.proxy}")
+        #     self.__session.proxies = proxies
 
 
         self.user_agent = user_agent
@@ -76,7 +76,13 @@ class Auth:
             "Referer": "https://chat.openai.com/chat",
             "Accept-Encoding": "gzip, deflate, br",
         }
-        response = self.__session.get(url, headers=headers)
+
+        response = self.__session.get(
+            url, 
+            headers=headers, 
+            proxy=self.proxy,
+        )
+
         is_200 = response.status_code == 200
         if is_200:
             print(f"{Fore.GREEN}[OpenAI][9] {Fore.GREEN}Request was successful")

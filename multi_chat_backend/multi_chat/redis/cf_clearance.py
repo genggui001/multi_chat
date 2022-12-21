@@ -58,26 +58,26 @@ async def get_cf_clearance(
 ) -> CFClearanceModel:
     
     # 写缓存模式
-    cf_clearance = await CFClearanceCache.get(key=url)
+    cf_clearance = await CFClearanceCache.get(key=url+str(proxies))
 
     if cf_clearance is not None:
         return cf_clearance
 
-    if proxies is not None:
-        if isinstance(proxies, str):
-            proxies = {'http': proxies, 'https': proxies} # type: ignore
+    # if proxies is not None:
+    #     if isinstance(proxies, str):
+    #         proxies = {'http': proxies, 'https': proxies} # type: ignore
 
     try:
         # 获取锁
         async with Semaphore(
-            name="mchatgpt:get_cf_clearance_lock",
+            name="mchatgpt:get_cf_clearance_lock_" + url + str(proxies),
             capacity=1,
             redis_url=config.redis.redis_url,
             expiry=1800,
             max_sleep=1.0,
         ):
 
-            async with httpx.AsyncClient(proxies=proxies) as session: # type: ignore
+            async with httpx.AsyncClient() as session: # type: ignore
                 cf_clearance_res = await session.post(
                     url=config.model.get_cf_clearance_url,
                     headers = {
@@ -95,7 +95,7 @@ async def get_cf_clearance(
 
                 assert "cf_clearance" in cf_clearance_res.cookies
 
-                await CFClearanceCache.set(key=url, value=cf_clearance_res, ex=random.randint(3600, 5400))
+                await CFClearanceCache.set(key=url+str(proxies), value=cf_clearance_res, ex=random.randint(3600, 5400))
 
                 logger.info(url + " cf clearance")
                 return cf_clearance_res
@@ -105,7 +105,7 @@ async def get_cf_clearance(
     except MaxSleepExceededError  as e:
         logger.info(url + " get update lock retry")
         if retry > 0:
-            return await get_cf_clearance(url=url, retry=retry-1)
+            return await get_cf_clearance(url=url, retry=retry-1, proxies=proxies)
         else:
             raise Exception(url + " get update lock retry max")
 
@@ -122,7 +122,7 @@ async def get_cf_clearance(
             logger.info(url + " cf clearance update retry")
             logger.warning(traceback.format_exc())
 
-            return await get_cf_clearance(url=url, retry=retry-1)
+            return await get_cf_clearance(url=url, retry=retry-1, proxies=proxies)
 
 
 
