@@ -38,6 +38,19 @@ class Auth:
             client_identifier="chrome_105"
         )
 
+        self.proxy = proxy
+        if self.proxy is not None:
+            if isinstance(self.proxy, str):
+                proxies = {
+                    "http": self.proxy,
+                    "https": self.proxy
+                }
+            else:
+                proxies = self.proxy
+            print(f"{Fore.GREEN}[OpenAI] {Fore.WHITE}Using proxy: {self.proxy}")
+            self.__session.proxies = proxies
+
+
         self.user_agent = user_agent
         self.__session.cookies = RequestsCookieJar()
         self.__session.cookies.set(

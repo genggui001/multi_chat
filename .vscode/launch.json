@@ -2,18 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: cf",
+      "name": "cf",
       "type": "python",
       "request": "launch",
-      "program": "get_cf_cookie.py",
-      "justMyCode": false,
+      "program": "docker/server.py",
       "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}/multi_chat_backend",
-      "args": [
-        "-u", "https://chat.openai.com",
-        "-f", "cookies.json", 
-        "-v"
-      ]
+      "justMyCode": false,
+      "cwd": "${workspaceFolder}/cf-clearance",
     },
     {
       "name": "启动后端",
