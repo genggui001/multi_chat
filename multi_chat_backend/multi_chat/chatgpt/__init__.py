@@ -227,7 +227,7 @@ class MChatGPT:
 
                 chat_cf_clearance = await get_cf_clearance(
                     url="https://chat.openai.com/",
-                    proxies=None
+                    proxies=proxy
                 )
 
                 async for answer, previous_convo, convo_id in chatgpt_ask(
