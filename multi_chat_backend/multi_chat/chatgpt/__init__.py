@@ -248,7 +248,8 @@ class MChatGPT:
                 or "token has expired" in e_str
                 or "Too many requests in 1 hour" in e_str
             ):
-                logger.warning(account_email + "is not available")
+                logger.warning(account_email + "\n" + e_str)
+                logger.warning(account_email + " is not available")
                 # token 失效注销
                 await AvailableOpenAIAccountSet.remove(item=account_email)
 
