@@ -54,7 +54,7 @@ async def ask(
 
     if proxies is not None:
         if isinstance(proxies, str):
-            proxies = {'http': proxies, 'https': proxies} # type: ignore
+            proxies = {'http://': proxies, 'https://': proxies} # type: ignore
 
     async with httpx.AsyncClient(proxies=proxies, transport=httpx.AsyncHTTPTransport(retries=5)) as session: # type: ignore
 
