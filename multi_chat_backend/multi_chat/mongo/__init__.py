@@ -27,4 +27,3 @@ def get_database() -> AgnosticDatabase:
 
 from .base import OID as OID
 from .base import MongoModel as MongoModel
-from .models import DialogHistory

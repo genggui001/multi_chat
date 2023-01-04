@@ -1,11 +1,11 @@
 import traceback
 
 from fastapi import APIRouter
+from multi_chat.chatgpt import get_chatgpt_client
+from multi_chat.models import ResponseCode, ResponseWrapper
 from pydantic import BaseModel
 
 from multi_chat import config, logger
-from multi_chat.chatgpt import get_chatgpt_client
-from multi_chat.models import ResponseCode, ResponseWrapper
 
 router = APIRouter()
 
@@ -23,7 +23,7 @@ async def chatgpt(
 ) -> ResponseWrapper[ResponseModel]:
     
     try:
-        if data.refresh_passwd != config.model.refresh_passwd:
+        if data.refresh_passwd != config.chatgpt.refresh_passwd:
             return ResponseWrapper(
                 code=ResponseCode.success,
                 result=ResponseModel(

@@ -3,12 +3,10 @@ import json
 import os
 import random
 from typing import AsyncGenerator, List, Mapping, Optional, Tuple
+from uuid import UUID, uuid1
 
 import aiofiles
 from asyncer import asyncify
-from multi_chat.redis import (AvailableOpenAIAccountSet, OpenAIAccount,
-                              OpenAIAccountCache)
-from multi_chat.redis.cf_clearance import CFClearanceCache, get_cf_clearance
 from pychatgpt.classes import exceptions as Exceptions
 from self_limiters import MaxSleepExceededError, RedisError, Semaphore
 
@@ -16,6 +14,12 @@ from multi_chat import config, logger
 
 from . import auth as openai
 from .ask import ask as chatgpt_ask
+from .available_openai_account_set import (AvailableOpenAIAccount,
+                                           AvailableOpenAIAccountSet)
+from .cf_clearance import CFClearance, CFClearanceCache, get_cf_clearance
+from .chatgpt_dialog_info import (get_now_dialog_info,
+                                  save_new_dialog_info_and_update_now)
+from .openai_account_cache import OpenAIAccount, OpenAIAccountCache
 
 
 # 手动转异步
@@ -24,8 +28,7 @@ def _openai_login(
     email:str, 
     password:str, 
     proxy:Optional[str]=None,
-    user_agent: Optional[str] = None,
-    chat_cf_clearance: Optional[str] = None,
+    chat_cf_clearance: Optional[CFClearance]=None,
 ):
     # 删除历史数据
     path = os.path.dirname(os.path.abspath(openai.__file__))
@@ -37,8 +40,8 @@ def _openai_login(
         email_address=email, 
         password=password, 
         proxy=proxy,
-        user_agent=user_agent,
-        chat_cf_clearance=chat_cf_clearance,
+        user_agent=chat_cf_clearance.user_agent if chat_cf_clearance is not None else None,
+        cookies=chat_cf_clearance.cookies if chat_cf_clearance is not None else None,
     ) # type: ignore
     access_token, expires_at = openai_auth.create_token() # type: ignore
 
@@ -55,7 +58,7 @@ class MChatGPT:
         self.account_map_idx:Mapping[str,int] = {}
         self.accounts:List[OpenAIAccount] = []
 
-        with open(config.model.account_path, "r", encoding="utf-8") as f:
+        with open(config.chatgpt.account_path, "r", encoding="utf-8") as f:
             tmp_accounts = json.load(f)
             for account_idx, account in enumerate(tmp_accounts):
                 self.account_map_idx[account['email']] = account_idx
@@ -72,7 +75,7 @@ class MChatGPT:
 
             tmp_accounts.append(new_account.dict())
 
-        async with aiofiles.open(config.model.account_path, "w", encoding="utf-8") as f:
+        async with aiofiles.open(config.chatgpt.account_path, "w", encoding="utf-8") as f:
             await f.write(json.dumps(tmp_accounts, indent=4, ensure_ascii=False))
 
 
@@ -81,14 +84,13 @@ class MChatGPT:
             try:
                 # 尝试登录更新
                 test_re = "fail", "fail", "fail", "fail"
-                async for tmp_re in self.ask(
+                async for tmp_re in self._ask(
                     prompt="1+1=?",
                     account_email=account.email,
                     conversation_id=None,
                     previous_convo_id=None,
                 ):
                     test_re = tmp_re
-
                 logger.info(account.email + " login success")
                 logger.info("answer is: " + test_re[0])
             except Exception as e:
@@ -113,7 +115,7 @@ class MChatGPT:
         account = await OpenAIAccountCache.get(key=email)
 
         if account is not None:
-            if await AvailableOpenAIAccountSet.exists(item=email) == True:
+            if await AvailableOpenAIAccountSet.exists(item=AvailableOpenAIAccount(email=email)) == True:
                 return account.access_token, account.expiry, account.proxy
             else:
                 logger.info(email + " is not available")
@@ -132,7 +134,7 @@ class MChatGPT:
                 account = self.accounts[self.account_map_idx[email]]
 
                 chat_cf_clearance = await get_cf_clearance(
-                    url="https://chat.openai.com/",
+                    url="https://chat.openai.com/chat",
                     proxies=account.proxy
                 )
 
@@ -145,9 +147,7 @@ class MChatGPT:
                     email=account.email, 
                     password=account.password, 
                     proxy=account.proxy,
-                    user_agent=chat_cf_clearance.user_agent,
-                    chat_cf_clearance=chat_cf_clearance.cookies["cf_clearance"],
-                    # auth0_cf_clearance=auth0_cf_clearance.cookies["cf_clearance"],
+                    chat_cf_clearance=chat_cf_clearance,
                 )
                 account.access_token = access_token
                 account.expiry = expiry
@@ -155,7 +155,7 @@ class MChatGPT:
                 await OpenAIAccountCache.set(key=email, value=account, ex=random.randint(21600, 28800))
 
                 # 设置为
-                await AvailableOpenAIAccountSet.add(item=email)
+                await AvailableOpenAIAccountSet.add(item=AvailableOpenAIAccount(email=email))
 
                 logger.info(email + " update token")
                 return account.access_token, account.expiry, account.proxy
@@ -170,8 +170,8 @@ class MChatGPT:
 
         except Exceptions.Auth0Exception as e:
             # cf 失效
-            logger.warning("https://chat.openai.com/ cf is not available")
-            await CFClearanceCache.delete(key="https://chat.openai.com/")
+            logger.warning("https://chat.openai.com/chat cf is not available")
+            await CFClearanceCache.delete(key="https://chat.openai.com/chat")
             raise e
 
         # redis炸
@@ -183,13 +183,69 @@ class MChatGPT:
                 # 删除账号
                 logger.info(email + " is not available")
                 
-                await AvailableOpenAIAccountSet.remove(item=email)
+                await AvailableOpenAIAccountSet.remove(item=AvailableOpenAIAccount(email=email))
                 raise e
             else:
                 logger.info(email + "get update retry")
                 return await self._get_account_access_token(email, refresh_not_available, retry-1)
 
+
     async def ask(
+        self, 
+        prompt: str,
+        session_id: UUID,
+        previous_dhid: Optional[UUID] = None,
+        retry: int = 5,
+    ) -> AsyncGenerator[Tuple[str, UUID, UUID], None]:
+
+        openai_account_email = None
+        openai_previous_convo_id = None
+        openai_conversation_id = None
+
+        # 获取openai历史信息
+        last_dialog_info = await get_now_dialog_info(
+            session_id=session_id,
+            dhid=previous_dhid
+        )
+
+        if last_dialog_info is not None:
+            openai_account_email = last_dialog_info.openai_account_email
+            openai_previous_convo_id = last_dialog_info.openai_previous_convo_id
+            openai_conversation_id = last_dialog_info.openai_conversation_id
+
+        now_dhid = uuid1()
+
+        answer = ""
+        new_openai_account_email = ""
+        new_openai_previous_convo_id = ""
+        new_openai_conversation_id = ""
+
+        async for r_item in self._ask(
+            prompt=prompt,
+            account_email=openai_account_email,
+            previous_convo_id=openai_previous_convo_id,
+            conversation_id=openai_conversation_id,
+            retry=retry,
+        ):
+            answer = r_item[0]
+            new_openai_account_email = r_item[1]
+            new_openai_previous_convo_id = r_item[2]
+            new_openai_conversation_id = r_item[3]
+            
+            yield answer, session_id, now_dhid 
+
+        if len(answer) > 0:
+            await save_new_dialog_info_and_update_now(
+                session_id=session_id,
+
+                dhid=now_dhid,
+                openai_account_email=new_openai_account_email,
+                openai_previous_convo_id=new_openai_previous_convo_id,
+                openai_conversation_id=new_openai_conversation_id,
+            )
+
+
+    async def _ask(
         self, 
         prompt: str,
         account_email: Optional[str] = None,
@@ -199,7 +255,8 @@ class MChatGPT:
     ) -> AsyncGenerator[Tuple[str, str, str, str], None]:
 
         if account_email is None:
-            account_email = await AvailableOpenAIAccountSet.random_get()
+            tmp_account_email = await AvailableOpenAIAccountSet.random_get()
+            account_email = tmp_account_email.email if tmp_account_email is not None else None
 
         assert account_email is not None
 
@@ -208,7 +265,7 @@ class MChatGPT:
 
             async with Semaphore(
                 name="mchatgpt:account_semaphores:" + account_email,
-                capacity=10,
+                capacity=1,
                 redis_url=config.redis.redis_url,
                 expiry=1800,
                 max_sleep=5.0,
@@ -226,7 +283,7 @@ class MChatGPT:
                 )
 
                 chat_cf_clearance = await get_cf_clearance(
-                    url="https://chat.openai.com/",
+                    url="https://chat.openai.com/chat",
                     proxies=proxy
                 )
 
@@ -236,8 +293,7 @@ class MChatGPT:
                     conversation_id=conversation_id, # type: ignore
                     previous_convo_id=previous_convo_id, # type: ignore
                     proxies=proxy, # type: ignore
-                    user_agent=chat_cf_clearance.user_agent,
-                    chat_cf_clearance=chat_cf_clearance.cookies["cf_clearance"],
+                    chat_cf_clearance=chat_cf_clearance,
                 ):
                     yield answer, account_email, previous_convo, convo_id
 
@@ -251,15 +307,15 @@ class MChatGPT:
                 logger.warning(account_email + "\n" + e_str)
                 # logger.warning(account_email + " is not available")
                 # token 失效注销
-                await AvailableOpenAIAccountSet.remove(item=account_email)
+                await AvailableOpenAIAccountSet.remove(item=AvailableOpenAIAccount(email=account_email))
 
                 if retry > 0:
-                    async for retry_re in self.ask(
+                    async for retry_re in self._ask(
                         prompt=prompt,
                         account_email=account_email,
                         conversation_id=conversation_id,
                         previous_convo_id=previous_convo_id,
-                        retry=retry,
+                        retry=retry-1,
                     ):
                         yield retry_re
                 else:
@@ -274,12 +330,12 @@ class MChatGPT:
                     # 休眠一下
                     await asyncio.sleep(0.3)
 
-                    async for retry_re in self.ask(
+                    async for retry_re in self._ask(
                         prompt=prompt,
                         account_email=account_email,
                         conversation_id=conversation_id,
                         previous_convo_id=previous_convo_id,
-                        retry=retry,
+                        retry=retry-1,
                     ):
                         yield retry_re
                 else:
@@ -293,15 +349,15 @@ class MChatGPT:
                     
                     # 休眠一下
                     await asyncio.sleep(0.3)
-                    logger.warning("https://chat.openai.com/" + " cf is not available")
-                    await CFClearanceCache.delete(key="https://chat.openai.com/")
+                    logger.warning("https://chat.openai.com/chat" + " cf is not available")
+                    await CFClearanceCache.delete(key="https://chat.openai.com/chat")
 
-                    async for retry_re in self.ask(
+                    async for retry_re in self._ask(
                         prompt=prompt,
                         account_email=account_email,
                         conversation_id=conversation_id,
                         previous_convo_id=previous_convo_id,
-                        retry=retry,
+                        retry=retry-1,
                     ):
                         yield retry_re
                 else:

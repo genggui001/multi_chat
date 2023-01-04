@@ -3,10 +3,11 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from multi_chat.mongo.dialog_info import get_one_dialog_info
-from multi_chat.mongo.models import User
-from multi_chat.mongo.user import get_current_active_user
 from pydantic import BaseModel
+
+# from .models import User
+from ..oauth2.user import get_current_active_user
+from .dialog_info import get_one_dialog_info
 
 router = APIRouter()
 

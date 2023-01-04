@@ -7,15 +7,18 @@ from typing import AsyncGenerator, Optional, Tuple
 # Requests
 import httpx
 
+from .cf_clearance import CFClearance
+
 
 async def ask(
         auth_token: Tuple,
         prompt: str,
+
         conversation_id: str or None,
         previous_convo_id: str or None,
+        
         proxies: str or dict or None,
-        user_agent: Optional[str] = None,
-        chat_cf_clearance: Optional[str] = None,
+        chat_cf_clearance: CFClearance, 
 ) -> AsyncGenerator[Tuple[str, str, str], None]:
     auth_token, expiry = auth_token
 
@@ -25,7 +28,7 @@ async def ask(
         'Accept': 'text/event-stream',
         'Referer': 'https://chat.openai.com/chat',
         'Origin': 'https://chat.openai.com',
-        'User-Agent': user_agent,
+        'User-Agent': chat_cf_clearance.user_agent,
         'X-OpenAI-Assistant-App-Id': ''
     }
 
@@ -63,9 +66,7 @@ async def ask(
             url="https://chat.openai.com/backend-api/conversation",
             headers=headers,
             data=json.dumps(data),  # type: ignore
-            cookies={
-                "cf_clearance": chat_cf_clearance,
-            } if chat_cf_clearance is not None else None,
+            cookies=chat_cf_clearance.cookies,
             timeout=360,
         ) as response:
             if response.status_code == 200:

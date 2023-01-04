@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import config, session
 from .chatgpt import create_chatgpt_client, get_chatgpt_client, refresh
 from .dialog import ask, conversation, feedback, moderations
+from .gpt3 import create_gpt3_client
 from .log import logger
 from .mongo import create_connection as create_mongo_connection
 from .oauth2 import token
@@ -41,7 +42,7 @@ app.include_router(moderations.router, prefix="/backend-api", tags=["backend-api
 app.include_router(token.router, prefix="/oauth2", tags=["oauth2"])
 
 @app.on_event('startup')
-@repeat_task(seconds=config.model.refresh_seconds, wait_first=True)
+@repeat_task(seconds=config.chatgpt.refresh_seconds, wait_first=True)
 async def refresh_chatgpt_all_accounts() -> None:
     logger.info('刷新chatgpt的所有用户')
     await get_chatgpt_client()._refresh_all_accounts()
@@ -59,6 +60,7 @@ async def startup():
     # chatgpt初始化
     await asyncio.gather(
         create_chatgpt_client(),
+        create_gpt3_client(),
     )
 
     logger.info("startup success")

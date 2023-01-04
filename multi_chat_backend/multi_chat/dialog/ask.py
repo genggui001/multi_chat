@@ -5,19 +5,21 @@ from uuid import UUID, uuid1
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from multi_chat.models import ResponseCode, ResponseWrapper
+from multi_chat.session import get_session_id
 from pydantic import BaseModel
 
 from multi_chat import logger
-from multi_chat.chatgpt import get_chatgpt_client
-from multi_chat.models import ResponseCode, ResponseWrapper
-from multi_chat.mongo.dialog_info import (get_now_dialog_info,
-                                          save_new_dialog_info_and_update_now)
-from multi_chat.session import get_session_id
+
+from .chat_client import get_chat_client
+from .dialog_info import (get_now_dialog_info,
+                          save_new_dialog_info_and_update_now)
 
 router = APIRouter()
 
 
 class RequestModel(BaseModel):
+    model: str = ""
     text: str
     previous_dhid: Optional[UUID] = None
     
@@ -36,11 +38,8 @@ async def ask(
         #当前句子
         sentence_text = data.text
         previous_dhid = data.previous_dhid
-        round_id = 0
 
-        openai_account_email = None
-        openai_previous_convo_id = None
-        openai_conversation_id = None
+        round_id = 0
 
         assert len(sentence_text) > 0, "need len(sentence_text) > 0"
 
@@ -54,29 +53,19 @@ async def ask(
             previous_dhid = last_dialog_info.dhid
             round_id = last_dialog_info.round_id + 1
 
-            openai_account_email = last_dialog_info.openai_account_email
-            openai_previous_convo_id = last_dialog_info.openai_previous_convo_id
-            openai_conversation_id = last_dialog_info.openai_conversation_id
-
-        now_dhid = uuid1()
-
-        chatgpt_client = get_chatgpt_client()
+        chat_client = get_chat_client(data.model)
 
         answer = ""
-        new_openai_account_email = ""
-        new_openai_previous_convo_id = ""
-        new_openai_conversation_id = ""
+        now_dhid = None
 
-        async for chatgpt_result in chatgpt_client.ask(
+        async for chatgpt_result in chat_client.ask(
             prompt=sentence_text,
-            account_email=openai_account_email,
-            previous_convo_id=openai_previous_convo_id,
-            conversation_id=openai_conversation_id,
+            session_id=session_id,
+            previous_dhid=previous_dhid,
         ):
             answer = chatgpt_result[0]
-            new_openai_account_email = chatgpt_result[1]
-            new_openai_previous_convo_id = chatgpt_result[2]
-            new_openai_conversation_id = chatgpt_result[3]
+            now_dhid = chatgpt_result[2]
+
 
         # 保存最后一轮
         await save_new_dialog_info_and_update_now(
@@ -88,9 +77,6 @@ async def ask(
 
             dhid=now_dhid,
             previous_dhid=previous_dhid,
-            openai_account_email=new_openai_account_email,
-            openai_previous_convo_id=new_openai_previous_convo_id,
-            openai_conversation_id=new_openai_conversation_id,
         )
         return ResponseWrapper(
             code=ResponseCode.success,
@@ -122,9 +108,6 @@ async def ask_streaming(
         previous_dhid = data.previous_dhid
         round_id = 0
 
-        openai_account_email = None
-        openai_previous_convo_id = None
-        openai_conversation_id = None
 
         assert len(sentence_text) > 0, "need len(sentence_text) > 0"
 
@@ -138,30 +121,22 @@ async def ask_streaming(
             previous_dhid = last_dialog_info.dhid
             round_id = last_dialog_info.round_id + 1
 
-            openai_account_email = last_dialog_info.openai_account_email
-            openai_previous_convo_id = last_dialog_info.openai_previous_convo_id
-            openai_conversation_id = last_dialog_info.openai_conversation_id
-
         # 手动尝试第一次迭代
-        now_dhid = uuid1()
 
-        chatgpt_client = get_chatgpt_client()
+        chat_client = get_chat_client(data.model)
 
-        r_iter = chatgpt_client.ask(
+        r_iter = chat_client.ask(
             prompt=sentence_text,
-            account_email=openai_account_email,
-            previous_convo_id=openai_previous_convo_id,
-            conversation_id=openai_conversation_id,
+            session_id=session_id,
+            previous_dhid=previous_dhid,
         )
 
-        answer, new_openai_account_email, new_openai_previous_convo_id, new_openai_conversation_id = await r_iter.__anext__()
+        answer, _, now_dhid = await r_iter.__anext__()
             
         # 重新封装返回器
         async def response_generator():
             nonlocal answer
-            nonlocal new_openai_account_email
-            nonlocal new_openai_previous_convo_id
-            nonlocal new_openai_conversation_id
+            nonlocal now_dhid
 
             try:
                 while True:
@@ -170,7 +145,7 @@ async def ask_streaming(
                         now_dhid=str(now_dhid)
                     ), ensure_ascii=False).encode("utf8") + b"\n")
 
-                    answer, new_openai_account_email, new_openai_previous_convo_id, new_openai_conversation_id = await r_iter.__anext__()
+                    answer, _, now_dhid = await r_iter.__anext__()
 
             except StopAsyncIteration:
                 pass
@@ -188,9 +163,6 @@ async def ask_streaming(
 
                 dhid=now_dhid,
                 previous_dhid=previous_dhid,
-                openai_account_email=new_openai_account_email,
-                openai_previous_convo_id=new_openai_previous_convo_id,
-                openai_conversation_id=new_openai_conversation_id,
             )
 
             yield b"data: [DONE]\n"

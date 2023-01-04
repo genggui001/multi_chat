@@ -1,4 +1,5 @@
 # Builtins
+import asyncio
 import base64
 import json
 import os
@@ -29,7 +30,7 @@ class Auth:
         password: str, 
         proxy: Optional[str] = None,
         user_agent: Optional[str] = None,
-        chat_cf_clearance: Optional[str] = None,
+        cookies: Optional[dict] = None,
     ):
         self.email_address = email_address
         self.password = password
@@ -53,10 +54,13 @@ class Auth:
 
         self.user_agent = user_agent
         self.__session.cookies = RequestsCookieJar()
-        self.__session.cookies.set(
-            name="cf_clearance",
-            value=chat_cf_clearance,
-        )
+
+        if cookies is not None:
+            for k, v in cookies.items():
+                self.__session.cookies.set(
+                    name=k,
+                    value=v,
+                )
 
         self.__session.cookies.set(
             name="__Secure-next-auth.session-token",

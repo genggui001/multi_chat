@@ -28,13 +28,19 @@ class MongoConfig(BaseModel):
 
 class RedisConfig(BaseModel):
     redis_url: str = "redis://localhost:6379/0"
+    redis_prefix: str = "multi_chat"
 
 
-class ModelConfig(BaseModel):
-    account_path: str = "./accounts.json"
+class ChatGPTConfig(BaseModel):
+    account_path: str = "./accounts/chatgpt.json"
     refresh_passwd: str = "Tiankong1234"
     refresh_seconds: int = 600
     get_cf_clearance_url : str = "http://127.0.0.1:8000/challenge"
+
+
+class GPT3Config(BaseModel):
+    account_path: str = "./accounts/gpt3.json"
+
 
 class SinkConfig(BaseModel):
     type: Literal["file", "stdout", "stderr"] = "stdout"
@@ -54,7 +60,8 @@ class Config(BaseSettings):
     fastapi: FastAPIConfig = Field(default_factory=FastAPIConfig)
     mongo: MongoConfig = Field(default_factory=MongoConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
-    model: ModelConfig = Field(default_factory=ModelConfig)
+    chatgpt: ChatGPTConfig = Field(default_factory=ChatGPTConfig)
+    gpt3: GPT3Config = Field(default_factory=GPT3Config)
     logger: List[LoggerConfig] = [LoggerConfig()]
 
     class Config:

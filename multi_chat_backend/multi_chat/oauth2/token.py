@@ -3,12 +3,13 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from multi_chat.models import ResponseCode, ResponseWrapper
-from multi_chat.mongo.models import User
-from multi_chat.mongo.user import (authenticate_user, create_access_token,
-                                   get_password_hash)
 from pydantic import BaseModel
 
 from multi_chat import config
+
+from ..oauth2.user import (authenticate_user, create_access_token,
+                           get_password_hash)
+from .models import User
 
 
 class Token(BaseModel):

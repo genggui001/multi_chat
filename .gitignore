@@ -164,3 +164,4 @@ multi_chat_backend/logs
 test.py
 multi_chat_backend/profile.html
 auth.json
+accounts
