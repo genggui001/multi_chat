@@ -34,7 +34,7 @@ class RedisConfig(BaseModel):
 class ChatGPTConfig(BaseModel):
     account_path: str = "./accounts/chatgpt.json"
     refresh_passwd: str = "Tiankong1234"
-    refresh_seconds: int = 600
+    refresh_seconds: int = 3600
     get_cf_clearance_url : str = "http://127.0.0.1:8000/challenge"
 
 
